@@ -1,3 +1,5 @@
+use std::sync::atomic::Ordering;
+
 use bytes::Bytes;
 use pyo3::prelude::*;
 use rq_engine::command::wtlogin::{LoginResponse, QRCodeState};
@@ -28,6 +30,17 @@ impl PyEngine {
         Self {
             inner: Engine::new(device.into(), get_version(protocol))
         }
+    }
+
+    #[getter(uin)]
+    fn uin(&self) -> PyResult<i64> {
+        Ok(self.inner.uin.load(Ordering::Relaxed))
+    }
+
+    #[setter(uin)]
+    fn set_uin(&mut self, value: i64) -> PyResult<()> {
+        self.inner.uin.store(value, Ordering::Relaxed);
+        Ok(())
     }
 
     fn decode_packet(&self, payload: &[u8]) -> PyPacket {
@@ -94,6 +107,7 @@ impl PyEngine {
             }
             QRCodeState::Confirmed(confirmed) => {
                 self.inner.process_qrcode_confirmed(confirmed.clone());
+                self.inner.uin.store(confirmed.uin, Ordering::Relaxed);
                 PyQRCodeState {
                     confirmed: Some(PyQRCodeConfirmed {
                         uin: confirmed.uin,
@@ -118,6 +132,22 @@ impl PyEngine {
 
     fn build_device_lock_login_packet(&self) -> PyPacket {
         self.inner.build_device_lock_login_packet().into()
+    }
+
+    fn build_login_packet(&self, password_md5: &[u8]) -> PyPacket {
+        self.inner.build_login_packet(password_md5, true).into()
+    }
+
+    fn build_sms_request_packet(&self) -> PyPacket {
+        self.inner.build_sms_request_packet().into()
+    }
+
+    fn build_sms_code_submit_packet(&self, code: &str) -> PyPacket {
+        self.inner.build_sms_code_submit_packet(code).into()
+    }
+
+    fn build_ticket_submit_packet(&self, ticket: &str) -> PyPacket {
+        self.inner.build_ticket_submit_packet(ticket).into()
     }
 
     fn decode_login_response(&mut self, payload: &[u8]) -> PyLoginResponse {
@@ -149,9 +179,24 @@ impl PyEngine {
                 too_many_sms_request: Some(true),
                 ..Default::default()
             },
-            LoginResponse::NeedCaptcha(_) => Default::default(),
-            LoginResponse::DeviceLocked(_) => Default::default(),
-            LoginResponse::UnknownStatus(_) => Default::default(),
+            LoginResponse::DeviceLocked(device_locked) => PyLoginResponse {
+                device_locked: Some(PyLoginDeviceLocked {
+                    sms_phone: device_locked.sms_phone,
+                    verify_url: device_locked.verify_url,
+                    message: device_locked.message,
+                }),
+                ..Default::default()
+            },
+            LoginResponse::NeedCaptcha(need_captcha) => PyLoginResponse {
+                need_captcha: Some(PyLoginNeedCaptcha {
+                    verify_url: need_captcha.verify_url,
+                }),
+                ..Default::default()
+            },
+            LoginResponse::UnknownStatus(_) => PyLoginResponse {
+                unknown_status: Some(true),
+                ..Default::default()
+            },
         }
     }
 
@@ -215,6 +260,12 @@ pub struct PyLoginResponse {
     pub account_frozen: Option<bool>,
     #[pyo3(get, set)]
     pub too_many_sms_request: Option<bool>,
+    #[pyo3(get, set)]
+    pub device_locked: Option<PyLoginDeviceLocked>,
+    #[pyo3(get, set)]
+    pub need_captcha: Option<PyLoginNeedCaptcha>,
+    #[pyo3(get, set)]
+    pub unknown_status: Option<bool>,
 }
 
 #[pyclass(name = "LoginSuccess")]
@@ -222,6 +273,24 @@ pub struct PyLoginResponse {
 pub struct PyLoginSuccess {
     #[pyo3(get, set)]
     pub account_info: PyAccountInfo,
+}
+
+#[pyclass(name = "LoginDeviceLocked")]
+#[derive(Default, Clone)]
+pub struct PyLoginDeviceLocked {
+    #[pyo3(get, set)]
+    pub sms_phone: Option<String>,
+    #[pyo3(get, set)]
+    pub verify_url: Option<String>,
+    #[pyo3(get, set)]
+    pub message: Option<String>,
+}
+
+#[pyclass(name = "LoginNeedCaptcha")]
+#[derive(Default, Clone)]
+pub struct PyLoginNeedCaptcha {
+    #[pyo3(get, set)]
+    pub verify_url: Option<String>,
 }
 
 #[pyclass(name = "AccountInfo")]
