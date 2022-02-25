@@ -6,9 +6,8 @@
 ## 使用方法
 
 ```bash
-pip install maturin
+pip install rqpy
 
-maturin develop
-
+# 参考 tests/test.py
 python3 tests/test.py
 ```
