@@ -1,5 +1,6 @@
 use bytes::Bytes;
 use pyo3::prelude::*;
+use pyo3::exceptions;
 use rq_engine::protocol::device::{Device, OSVersion};
 
 use crate::pbytes::PBytes;
@@ -159,8 +160,58 @@ impl From<PyOSVersion> for OSVersion {
 #[pymethods]
 impl PyDevice {
     #[new]
-    fn new() -> PyDevice {
-        Device::random().into()
+    fn new(display: String,
+           product: String,
+           device: String,
+           board: String,
+           model: String,
+           finger_print: String,
+           boot_id: String,
+           proc_version: String,
+           imei: String,
+           brand: String,
+           bootloader: String,
+           base_band: String,
+           version: PyOSVersion,
+           sim_info: String,
+           os_type: String,
+           mac_address: String,
+           ip_address: &[u8],
+           wifi_bssid: String,
+           wifi_ssid: String,
+           imsi_md5: &[u8],
+           android_id: String,
+           apn: String,
+           vendor_name: String,
+           vendor_os_name: String,
+    ) -> Self
+    {
+        return Self {
+            display,
+            product,
+            device,
+            board,
+            model,
+            finger_print,
+            boot_id,
+            proc_version,
+            imei,
+            brand,
+            bootloader,
+            base_band,
+            version,
+            sim_info,
+            os_type,
+            mac_address,
+            ip_address: ip_address.to_vec(),
+            wifi_bssid,
+            wifi_ssid,
+            imsi_md5: imsi_md5.into(),
+            android_id,
+            apn,
+            vendor_name,
+            vendor_os_name,
+        };
     }
 
     #[staticmethod]
@@ -174,7 +225,10 @@ impl PyDevice {
 
     #[staticmethod]
     fn from_str(s: &str) -> PyResult<PyDevice> {
-        let device: Device = serde_json::from_str(s).unwrap();
-        Ok(device.into())
+        match serde_json::from_str::<Device>(s)
+        {
+            Ok(device) => Ok(device.into()),
+            Err(e) => Err(exceptions::PyValueError::new_err(e.to_string())),
+        }
     }
 }
