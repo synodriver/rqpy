@@ -8,7 +8,6 @@ from rqpy import Device, Engine, Packet
 def send_data(conn: socket.socket, data: bytes):
     conn.sendall((len(data) + 4).to_bytes(4, byteorder='big'))
     conn.sendall(data)
-    pass
 
 
 def read_data(conn: socket.socket) -> bytes:
@@ -59,7 +58,7 @@ def main():
                 print("canceled")
             if state.confirmed:
                 print("confirmed")
-                print("uin {}".format(state.confirmed.uin))
+                print(f"uin {state.confirmed.uin}")
                 req = engine.build_qrcode_login_packet(
                     state.confirmed.tmp_pwd,
                     state.confirmed.tmp_no_pic_sig,
